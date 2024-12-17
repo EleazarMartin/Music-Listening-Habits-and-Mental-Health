@@ -1,0 +1,298 @@
+---
+title: "DSCI304_FinalProj"
+author: "Eleazar Martin"
+date: "2024-12-03"
+output: pdf_document
+---
+
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(RColorBrewer)
+
+data <- read.csv("/Users/eleazarmartin/Desktop/mxmh_survey_results.csv")
+
+## Most healthy pie chart
+
+data_healthy <- data %>% 
+  filter(Depression == 0) %>% 
+  filter(Anxiety == 0) %>% 
+  filter(Insomnia == 0) %>% 
+  filter(OCD == 0)
+
+data_summary <- data_healthy %>% 
+  count(Fav.genre) %>% 
+  mutate(percentage = n / sum(n) * 100) 
+
+data_summary <- data_summary %>%
+  arrange(desc(percentage)) %>%
+  mutate(Fav.genre = factor(Fav.genre, levels = Fav.genre))
+
+blues_palette <- rev(brewer.pal(n = nrow(data_summary), name = "Blues"))
+
+ggplot(data_summary, aes(x = "", y = percentage, fill = Fav.genre)) +
+  geom_bar(stat = "identity", width = 1) +
+  coord_polar(theta = "y") +
+  geom_text(aes(label = paste0(round(percentage, 1), "%")), 
+            position = position_stack(vjust = 0.5),
+            color = "black", size = 5) + 
+  labs(title = "Classical music is the most common favorite genre among most \nmentally-healthy respondents", fill = "Genre") +
+  theme_void() +
+  scale_fill_manual(values = blues_palette)
+
+
+## Most unhealthy pie chart
+
+data_unhealthy <- data %>% 
+  filter(Depression >= 8) %>% 
+  filter(Anxiety >= 8) %>% 
+  filter(Insomnia >= 8) %>% 
+  filter(OCD >= 8)
+
+data_summary2 <- data_unhealthy %>% 
+  count(Fav.genre) %>% 
+  mutate(percentage = n / sum(n) * 100) 
+
+data_summary2 <- data_summary2 %>%
+  arrange(desc(percentage)) %>%
+  mutate(Fav.genre = factor(Fav.genre, levels = Fav.genre))
+
+reds_palette <- rev(brewer.pal(n = nrow(data_summary2), name = "Reds"))
+
+ggplot(data_summary2, aes(x = "", y = percentage, fill = Fav.genre)) +
+  geom_bar(stat = "identity", width = 1) +
+  coord_polar(theta = "y") +
+  geom_text(aes(label = paste0(round(percentage, 1), "%")), 
+            position = position_stack(vjust = 0.5),
+            color = "black", size = 5) + 
+  labs(title = "Metal music is the most common favorite genre among most \nmentally-unhealthy respondents", fill = "Genre") +
+  theme_void() +
+  scale_fill_manual(values = reds_palette)
+
+```
+```{r}
+
+
+
+```
+
+```{r}
+library(tidyr)
+
+# Categorizing severity
+categorize_severity <- function(value) {
+  if (value <= 3) {
+    return("Mild")
+  } else if (value >= 4 & value <= 6) {
+    return("Moderate")
+  } else {
+    return("Severe")
+  }
+}
+
+data <- data %>%
+  filter(!is.na(Depression) & !is.na(Anxiety) & !is.na(Insomnia) & !is.na(OCD))
+
+data <- data %>%
+  mutate(
+    Anxiety_Severity = sapply(Anxiety, categorize_severity),
+    Depression_Severity = sapply(Depression, categorize_severity),
+    Insomnia_Severity = sapply(Insomnia, categorize_severity),
+    OCD_Severity = sapply(OCD, categorize_severity)
+  )
+
+data_long <- data %>%
+  pivot_longer(
+    cols = c(Anxiety_Severity, Depression_Severity, Insomnia_Severity, OCD_Severity),
+    names_to = "Condition",
+    values_to = "Severity"
+  ) %>%
+  mutate(Condition = sub("_Severity", "", Condition)) 
+
+grouped_data <- data_long %>%
+  group_by(Condition, Severity) %>%
+  summarize(Avg_Hours = mean(Hours.per.day))
+
+ggplot(grouped_data, aes(x = Condition, y = Avg_Hours, fill = Severity)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(
+    title = "People in the Severe Category Listen to the Most Music Daily",
+    x = "",
+    y = "Average Listening Hours Per Day",
+    fill = "Severity"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 0, hjust = 0.5)) +
+  scale_fill_manual(values = c("Mild" = "steelblue3", "Moderate" = "mediumorchid3", "Severe" = "orangered3"))
+```
+
+
+```{r}
+data <- data %>%
+  mutate(Age_Group = case_when(
+    Age <= 25 ~ "<26",
+    Age >= 50 ~ "50+",
+    TRUE ~ "26-49"
+  ))
+
+ggplot(data, aes(x = Age_Group, y = Anxiety, fill = Age_Group)) +
+  geom_boxplot(alpha = 0.7, outlier.color = "red", outlier.shape = 16) +
+  scale_fill_manual(values = c("<26" = "red", "26-49" = "orange", "50+" = "yellow")) +
+  labs(
+    title = "Younger people self-report highest Anxiety levels",
+    x = "Age Group",
+    y = "Anxiety Level",
+    fill = "Age Group"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5),
+    axis.text.x = element_text(angle = 0, hjust = 0.5),
+    legend.position = "none" 
+  )
+
+```
+
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(stargazer)
+
+data <- data %>% filter(!is.na(Age))
+
+data <- data %>%
+  mutate(Fav.genre_encoded = ifelse(Fav.genre == "Classical", 0, 1))
+
+data <- data %>%
+  mutate(While.working_encoded = ifelse(While.working == "Yes", 1, 0))
+
+model <- lm(Anxiety ~ Age + Fav.genre_encoded + Hours.per.day, data = data)
+summary(model)
+
+stargazer(
+  model,
+  type = "text",
+  title = "Coefficients from the Linear Regression Model",
+  align = TRUE,
+  no.space = TRUE,
+  digits = 3,
+  single.row = TRUE
+)
+
+age_coeff <- coef(model)["Age"]
+age_seq <- seq(min(data$Age), max(data$Age), length.out = 100)
+age_effect <- data.frame(
+  Age = age_seq,
+  Predicted_Anxiety = coef(model)["(Intercept)"] + age_coeff * age_seq
+)
+ggplot(age_effect, aes(x = Age, y = Predicted_Anxiety)) +
+  geom_line(color = "blue") +
+  labs(
+    title = "Anxiety decreases with age",
+    x = "Age",
+    y = "Predicted Anxiety Level"
+  ) +
+  theme_minimal()
+
+genre_coeff <- coef(model)["Fav.genre_encoded"]
+genre_effect <- data.frame(
+  Fav.genre_encoded = c("Classical", "Other"),  
+  Predicted_Anxiety = coef(model)["(Intercept)"] + genre_coeff * c(0, 1)
+)
+
+ggplot(genre_effect, aes(x = Fav.genre_encoded, y = Predicted_Anxiety)) +
+  geom_bar(stat = "identity", fill = c("blue", "orange"), alpha = 0.7) +
+  labs(
+    title = "Effect of Favorite Genre on Anxiety",
+    y = "Predicted Anxiety Level"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.title.x = element_blank() 
+  )
+
+
+```
+```{r}
+
+data <- data %>%
+  filter(!is.na(Age), !is.na(Hours.per.day)) %>%
+  mutate(
+    Fav.genre_encoded = ifelse(Fav.genre == "Classical", 0, 1),
+    While.working_encoded = ifelse(While.working == "Yes", 1, 0)
+  )
+
+model_interaction <- lm(Anxiety ~ Age + Fav.genre_encoded * Hours.per.day, data = data)
+summary(model_interaction)
+
+interaction_effect <- expand.grid(
+  Fav.genre_encoded = c(0, 1),
+  Hours.per.day = seq(min(data$Hours.per.day, na.rm = TRUE), 
+                      max(data$Hours.per.day, na.rm = TRUE), 
+                      length.out = 100),
+  Age = mean(data$Age, na.rm = TRUE)  
+)
+
+interaction_effect$Predicted_Anxiety <- predict(model_interaction, newdata = interaction_effect)
+
+interaction_effect$Fav.genre_label <- ifelse(interaction_effect$Fav.genre_encoded == 0, "Classical", "Other Genres")
+
+ggplot(interaction_effect, aes(x = Hours.per.day, y = Predicted_Anxiety, color = Fav.genre_label)) +
+  geom_line(size = 1) +
+  labs(
+    title = "More than 7 hours a day for Classical lovers increases anxiety",
+    x = "Hours per Day",
+    y = "Predicted Anxiety Level",
+    color = "Favorite Genre"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 16),
+    legend.position = "bottom"
+  )
+
+
+
+```
+
+
+
+
+
+
+```{r}
+library(dagitty)
+library(ggdag)
+
+dag <- dagitty("
+  dag {
+    Age -> Favorite_Genre
+    Favorite_Genre -> Listening_While_Working
+    Listening_While_Working -> Listening_Hours
+    Listening_Hours -> Anxiety
+    Age -> Anxiety
+  }
+")
+
+label_map <- c(
+  "Age" = "Age",
+  "Favorite_Genre" = "Favorite\nGenre",
+  "Listening_While_Working" = "Listening\nWhile\nWorking",
+  "Listening_Hours" = "Listening\nHours",
+  "Anxiety" = "Anxiety"
+)
+
+ggdag(dag, layout = "circle") +
+  geom_dag_node(size = 20) +  
+  geom_dag_text(aes(label = label_map[name]), size = 2) +  
+  geom_dag_edges_link(edge_width = 0.8, arrow_directed = grid::arrow(length = grid::unit(4, "mm"))) +  
+  coord_fixed() +  
+  theme_void() + 
+  labs(title = "Hypothesized Pathway: Age to Anxiety via Listening Habits") +
+  theme(plot.title = element_text(hjust = 0.5, size = 16, face = "bold"))  
+```
+
+
+
