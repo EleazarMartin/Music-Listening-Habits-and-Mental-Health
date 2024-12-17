@@ -1,2 +1,2 @@
-# Music-and-Mental-Health
+# Music Listening Habits & Mental Health
 ### Analysis on the relationship between music preferences and self-reported mental health (Anxiety, Depression, OCD, Insomnia). 
